@@ -5,4 +5,6 @@ package com.example.san.googlemapsapi.ui.main;
  */
 
 public interface IMapsView {
+    void onSuccess();
+    void onErrorRequest(String err_msg);
 }

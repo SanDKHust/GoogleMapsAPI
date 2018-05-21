@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout android:orientation="vertical"
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:id="@+id/bottom_sheet"
+    android:background="#fff"
+    app:behavior_hideable="true"
+    app:behavior_peekHeight="90dp"
+    app:layout_behavior="android.support.design.widget.BottomSheetBehavior"
+    android:layout_height="wrap_content"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <TextView
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:id="@+id/text_name_location"/>
+    <LinearLayout
+        android:weightSum="10"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+        <TextView
+            android:id="@+id/text_address"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:layout_gravity="center"
+            android:layout_weight="4"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content" />
+        <LinearLayout
+            android:layout_weight="3"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content">
+            <ImageView
+                android:scaleType="fitXY"
+                android:src="@drawable/ic_distance"
+                android:layout_width="30dp"
+                android:layout_height="30dp" />
+            <TextView
+                android:layout_gravity="center"
+                android:id="@+id/text_distance"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
+        <LinearLayout
+            android:layout_weight="3"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content">
+            <ImageView
+                android:scaleType="fitXY"
+                android:src="@drawable/ic_access_time_black_24dp"
+                android:layout_width="30dp"
+                android:layout_height="30dp" />
+            <TextView
+                android:layout_gravity="center"
+                android:id="@+id/text_duration"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/button_more_info"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+        <LinearLayout
+            android:background="#0027ff"
+            android:layout_margin="1dp"
+            android:layout_weight="1"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content">
+            <ImageView
+                android:scaleType="fitXY"
+                android:src="@drawable/ic_info_outline_black_24dp"
+                android:layout_width="30dp"
+                android:layout_height="30dp" />
+            <TextView
+                android:textColor="#ffffff"
+                android:gravity="center"
+                android:text="Thông tin khác"
+                android:layout_gravity="center"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
+        <LinearLayout
+            android:layout_margin="1dp"
+            android:id="@+id/button_chi_duong"
+            android:background="#0027ff"
+            android:layout_weight="1"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content">
+            <ImageView
+                android:scaleType="fitXY"
+                android:src="@drawable/ic_call_split_black_24dp"
+                android:layout_width="30dp"
+                android:layout_height="30dp" />
+            <TextView
+                android:textColor="#ffffff"
+                android:gravity="center"
+                android:text="Chỉ đường"
+                android:layout_gravity="center"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
+    </LinearLayout>
+   <FrameLayout
+       android:layout_width="match_parent"
+       android:layout_height="wrap_content">
+       <LinearLayout
+           android:visibility="gone"
+           android:orientation="vertical"
+           android:layout_width="match_parent"
+           android:layout_height="wrap_content">
+           <TextView
+               android:text="more information"
+               android:layout_width="match_parent"
+               android:layout_height="match_parent" />
+           <TextView
+               android:text="more information"
+               android:layout_width="match_parent"
+               android:layout_height="match_parent" />
+           <TextView
+               android:text="more information"
+               android:layout_width="match_parent"
+               android:layout_height="match_parent" />
+       </LinearLayout>
+       <LinearLayout
+           android:layout_width="match_parent"
+           android:layout_height="match_parent">
+           <TextView
+               android:layout_gravity="center"
+               android:text="Chọn phương tiện:"
+               android:layout_width="wrap_content"
+               android:layout_height="wrap_content" />
+           <LinearLayout
+               android:gravity="center"
+               android:layout_width="match_parent"
+               android:layout_height="wrap_content">
+               <ImageButton
+                   android:id="@+id/button_walk"
+                   android:background="@color/transparent"
+                   android:layout_weight="1"
+                   android:src="@drawable/ic_directions_walk_black_24dp"
+                   android:layout_width="30dp"
+                   android:layout_height="30dp" />
+               <ImageButton
+                   android:id="@+id/button_car"
+                   android:background="@color/transparent"
+                   android:layout_weight="1"
+                   android:src="@drawable/ic_directions_car_black_24dp"
+                   android:layout_width="30dp"
+                   android:layout_height="30dp" />
+               <ImageButton
+                   android:id="@+id/button_bus"
+                   android:background="@color/transparent"
+                   android:layout_weight="1"
+                   android:src="@drawable/ic_directions_bus_black_24dp"
+                   android:layout_width="30dp"
+                   android:layout_height="30dp" />
+               <ImageButton
+                   android:id="@+id/button_bike"
+                   android:background="@color/transparent"
+                   android:layout_weight="1"
+                   android:src="@drawable/ic_directions_bike_black_24dp"
+                   android:layout_width="30dp"
+                   android:layout_height="30dp" />
+           </LinearLayout>
+       </LinearLayout>
+   </FrameLayout>
+</LinearLayout>

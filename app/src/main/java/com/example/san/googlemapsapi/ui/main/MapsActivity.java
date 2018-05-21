@@ -5,15 +5,40 @@ import android.annotation.SuppressLint;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.drawable.Drawable;
 import android.location.Location;
+import android.os.Build;
+import android.os.Bundle;
+import android.support.annotation.DrawableRes;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
-import android.os.Bundle;
+import android.support.annotation.RequiresApi;
+import android.support.design.widget.BottomSheetBehavior;
+import android.support.design.widget.Snackbar;
+import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.support.v4.graphics.drawable.DrawableCompat;
 import android.util.Log;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.widget.ImageButton;
+import android.widget.LinearLayout;
+import android.widget.QuickContactBadge;
+import android.widget.TextView;
+import android.widget.Toast;
+
 
 import com.example.san.googlemapsapi.R;
 import com.example.san.googlemapsapi.base.BaseActivity;
+import com.example.san.googlemapsapi.model.place.DirectionParser;
+import com.example.san.googlemapsapi.model.place.EndLocation;
+import com.example.san.googlemapsapi.model.place.Leg;
+import com.example.san.googlemapsapi.model.place.Polyline;
+import com.example.san.googlemapsapi.model.place.StartLocation;
+import com.example.san.googlemapsapi.model.place.Step;
+import com.example.san.googlemapsapi.untils.BitmapUntils;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.Status;
@@ -27,15 +52,18 @@ import com.google.android.gms.location.places.PlaceDetectionClient;
 import com.google.android.gms.location.places.Places;
 import com.google.android.gms.location.places.ui.PlaceAutocompleteFragment;
 import com.google.android.gms.location.places.ui.PlaceSelectionListener;
+import com.google.android.gms.maps.CameraUpdate;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.BitmapDescriptor;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 import com.karumi.dexter.Dexter;
@@ -44,25 +72,35 @@ import com.karumi.dexter.PermissionToken;
 import com.karumi.dexter.listener.PermissionRequest;
 import com.karumi.dexter.listener.multi.MultiplePermissionsListener;
 
+import java.util.ArrayList;
 import java.util.List;
 
-public class MapsActivity extends BaseActivity implements OnMapReadyCallback, GoogleApiClient.ConnectionCallbacks
-        ,GoogleApiClient.OnConnectionFailedListener,LocationListener {
+import static com.example.san.googlemapsapi.untils.Const.Map.MILLISECOND_PER_SECOND;
+import static com.example.san.googlemapsapi.untils.Const.Map.MINUTE;
+
+
+public class MapsActivity extends BaseActivity implements OnMapReadyCallback, GoogleApiClient.ConnectionCallbacks,
+        GoogleApiClient.OnConnectionFailedListener, LocationListener, IMapsView {
 
     private static final String TAG = BaseActivity.class.getSimpleName();
     private GoogleMap mMap;
     private boolean mLocationPermissionGranted = false;
-    private GoogleApiClient mGoogleApiClient;
-    private GeoDataClient mGeoDataClient;
-    private PlaceDetectionClient mPlaceDetectionClient;
-    private LocationRequest mLocationRequest;
-    private Location mLastLocation;
     private Marker mCurrentMarker;
     private FusedLocationProviderClient mFusedLocationProviderClient;
     private LatLng mDefaultLocation = null;
     private static final float DEFAULT_ZOOM = 17;
     private Place mSelectPlace = null;
-    private Location mCurrentLocation = null;
+    private LatLng mCurrentLatLng = null;
+    private MapsPst mMapsPst;
+    private TextView mTextName, mTextAddress, mTextDuration, mTextDistance;
+    private com.google.android.gms.maps.model.Polyline mCurrentPolyline = null;
+    private BottomSheetBehavior sheetBehavior;
+    private LinearLayout layoutBottomSheet, mButtonChiDuong, mButtonInfo;
+    private GoogleApiClient mGoogleApiClient;
+    private LocationRequest mLocationRequest;
+    private boolean isUpdate = false;
+    private ImageButton mButtonBike, mButtonBus,mButtonCar,mButtonWalk;
+    private String mode = "driving";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -71,33 +109,73 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
         innitView();
         getLocationPermission();
         showDialog();
-        // Obtain the SupportMapFragment and get notified when the map is ready to be used.
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
-        PlaceAutocompleteFragment autocompleteFragment = (PlaceAutocompleteFragment)
+        innitPlaceAutocompleteFragment();
+        setUpLocationClientIfNeeded();
+        buildLocationRequest();
+    }
+
+    private void buildLocationRequest() {
+        mLocationRequest = LocationRequest.create();
+        mLocationRequest.setInterval(10*MILLISECOND_PER_SECOND);
+        mLocationRequest.setFastestInterval(5 * MILLISECOND_PER_SECOND);
+        mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+    }
+
+    private void setUpLocationClientIfNeeded() {
+        if (mGoogleApiClient == null) {
+            mGoogleApiClient = new GoogleApiClient.Builder(this)
+                    .addConnectionCallbacks(this)
+                    .addOnConnectionFailedListener(this)
+                    .addApi(LocationServices.API)
+                    .build();
+        }
+    }
+
+    private void innitPlaceAutocompleteFragment() {
+        final PlaceAutocompleteFragment autocompleteFragment = (PlaceAutocompleteFragment)
                 getFragmentManager().findFragmentById(R.id.place_autocomplete_fragment);
 
         autocompleteFragment.setOnPlaceSelectedListener(mPlaceSelectionListener);
-
+        autocompleteFragment.getView().findViewById(R.id.place_autocomplete_clear_button)
+                .setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View view) {
+                        autocompleteFragment.setText("");
+                        view.setVisibility(View.GONE);
+                        if (mCurrentMarker != null) mCurrentMarker.remove();
+                        if (mCurrentPolyline != null) mCurrentPolyline.remove();
+                        if (mMap != null) {
+                            moveCameraToCurrentLocation();
+                        }
+                        sheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+                        isUpdate = false;
+                    }
+                });
+        autocompleteFragment.getView().setBackgroundColor(Color.WHITE);
     }
 
     private PlaceSelectionListener mPlaceSelectionListener = new PlaceSelectionListener() {
         @Override
         public void onPlaceSelected(Place place) {
             if (mMap != null) {
-                if(mCurrentMarker != null) mCurrentMarker.remove();
+                mSelectPlace = place;
+                if (mCurrentMarker != null) mCurrentMarker.remove();
+                if (mCurrentPolyline != null) mCurrentPolyline.remove();
                 mCurrentMarker = mMap.addMarker(new MarkerOptions()
-                        .icon(BitmapDescriptorFactory.fromBitmap(resizeBitmap("ic_location", 40, 50)))
+                        .icon(BitmapDescriptorFactory.fromBitmap(BitmapUntils.getBitmapFromVectorDrawable(getApplicationContext(), R.drawable.ic_location_on_black_24dp)))
                         .position(place.getLatLng())
                         .title(place.getName().toString()));
                 mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(place.getLatLng(), DEFAULT_ZOOM));
+                sheetBehavior.setState(BottomSheetBehavior.STATE_COLLAPSED);
+                isUpdate = true;
             }
         }
 
         @Override
         public void onError(Status status) {
-
             Log.i("TAG", "An error occurred: " + status);
         }
     };
@@ -105,13 +183,61 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
 
     private void innitView() {
         mDefaultLocation = new LatLng(21.007376, 105.842882);
-        // Construct a GeoDataClient.
-        mGeoDataClient = Places.getGeoDataClient(this, null);
-        // Construct a PlaceDetectionClient.
-        mPlaceDetectionClient = Places.getPlaceDetectionClient(this, null);
-        // Construct a FusedLocationProviderClient.
         mFusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(this);
+        mMapsPst = new MapsPst(this);
+        layoutBottomSheet = (LinearLayout) findViewById(R.id.bottom_sheet);
+        sheetBehavior = BottomSheetBehavior.from(layoutBottomSheet);
+        sheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+        mTextName = (TextView) findViewById(R.id.text_name_location);
+        mTextAddress = (TextView) findViewById(R.id.text_address);
+        mTextDuration = (TextView) findViewById(R.id.text_duration);
+        mTextDistance = (TextView) findViewById(R.id.text_distance);
+        mButtonChiDuong = (LinearLayout) findViewById(R.id.button_chi_duong);
+        mButtonChiDuong.setOnClickListener(mButtonChiDuongClick);
+        mButtonInfo = (LinearLayout) findViewById(R.id.button_more_info);
+        mButtonInfo.setOnClickListener(mButtonInfoClick);
+        mButtonBike = (ImageButton) findViewById(R.id.button_bike);
+        mButtonBus = (ImageButton) findViewById(R.id.button_bus);
+        mButtonCar = (ImageButton) findViewById(R.id.button_car);
+        mButtonWalk = (ImageButton) findViewById(R.id.button_walk);
+        mButtonBike.setOnClickListener(mButtonSelectMode);
+        mButtonWalk.setOnClickListener(mButtonSelectMode);
+        mButtonCar.setOnClickListener(mButtonSelectMode);
+        mButtonBus.setOnClickListener(mButtonSelectMode);
     }
+
+    private View.OnClickListener mButtonInfoClick = new View.OnClickListener() {
+        @Override
+        public void onClick(View view) {
+            sheetBehavior.setState(BottomSheetBehavior.STATE_EXPANDED);
+            mButtonBike.setVisibility(View.GONE);
+            mButtonBus .setVisibility(View.GONE);
+            mButtonCar .setVisibility(View.GONE);
+            mButtonWalk.setVisibility(View.GONE);
+        }
+    };
+    private View.OnClickListener mButtonChiDuongClick = new View.OnClickListener() {
+        @Override
+        public void onClick(View view) {
+            sheetBehavior.setState(BottomSheetBehavior.STATE_EXPANDED);
+            mButtonBike.setVisibility(View.VISIBLE);
+            mButtonBus .setVisibility(View.VISIBLE);
+            mButtonCar .setVisibility(View.VISIBLE);
+            mButtonWalk.setVisibility(View.VISIBLE);
+        }
+    };
+    private View.OnClickListener mButtonSelectMode = new View.OnClickListener() {
+        @Override
+        public void onClick(View view) {
+            if(view.getId() == R.id.button_bike) mode = "bicycling";
+            else if(view.getId() == R.id.button_car) mode = "driving";
+            else if(view.getId() == R.id.button_walk) mode = "walking";
+            else mode = "transit";
+            mMapsPst.getDataDirection(mCurrentLatLng,mSelectPlace.getLatLng(),mode);
+            isUpdate = true;
+            moveCameraToCurrentLocation();
+        }
+    };
 
 
     private void updateLocationUI() {
@@ -120,13 +246,12 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
         }
         try {
             if (mLocationPermissionGranted) {
-                buildGoogleApiClient();
                 mMap.setMyLocationEnabled(true);
                 mMap.getUiSettings().setMyLocationButtonEnabled(true);
             } else {
                 mMap.setMyLocationEnabled(false);
                 mMap.getUiSettings().setMyLocationButtonEnabled(false);
-                mCurrentLocation = null;
+                mCurrentLatLng = null;
                 getLocationPermission();
             }
         } catch (SecurityException e) {
@@ -165,16 +290,10 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
                 @Override
                 public void onComplete(@NonNull Task task) {
                     if (task.isSuccessful()) {
-                        mCurrentLocation = (Location) locationResult.getResult();
-                        LatLng latLng = new LatLng(mCurrentLocation.getLatitude(), mCurrentLocation.getLongitude());
-                        mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(latLng, 13));
-                        CameraPosition cameraPosition = new CameraPosition.Builder()
-                                .target(latLng)             // Sets the center of the map to location user
-                                .zoom(15)                   // Sets the zoom
-                                .bearing(90)                // Sets the orientation of the camera to east
-                                .tilt(40)                   // Sets the tilt of the camera to 30 degrees
-                                .build();                   // Creates a CameraPosition from the builder
-                        mMap.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition));
+                        Location currentLocation = (Location) locationResult.getResult();
+                        mCurrentLatLng = new LatLng(currentLocation.getLatitude(), currentLocation.getLongitude());
+                        mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(mCurrentLatLng, 13));
+                        moveCameraToCurrentLocation();
                     } else {
                         Log.d(TAG, "Current location is null. Using defaults.");
                         Log.e(TAG, "Exception: %s", task.getException());
@@ -186,19 +305,14 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
         }
     }
 
-    public Bitmap resizeBitmap(String drawableName, int width, int height) {
-        Bitmap imageBitmap = BitmapFactory.decodeResource(getResources(), getResources().getIdentifier(drawableName, "drawable", getPackageName()));
-        return Bitmap.createScaledBitmap(imageBitmap, width, height, false);
-    }
-
-
-    private synchronized void buildGoogleApiClient(){
-        mGoogleApiClient = new GoogleApiClient.Builder(this)
-                .addConnectionCallbacks(this)
-                .addConnectionCallbacks(this)
-                .addApi(LocationServices.API)
-                .build();
-        mGoogleApiClient.connect();
+    private void moveCameraToCurrentLocation() {
+        CameraPosition cameraPosition = new CameraPosition.Builder()
+                .target(mCurrentLatLng)             // Sets the center of the map to location user
+                .zoom(DEFAULT_ZOOM)                   // Sets the zoom
+                .bearing(90)                // Sets the orientation of the camera to east
+                .tilt(40)                   // Sets the tilt of the camera to 30 degrees
+                .build();                   // Creates a CameraPosition from the builder
+        mMap.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition));
     }
 
     @Override
@@ -213,50 +327,77 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
                     getDeviceLocation();
                 }
             });
-            mMap.setPadding(5, 100, 5, 5);
+            mMap.setPadding(0, 150, 0, 0);
         }
-
     }
 
-    @SuppressLint("MissingPermission")
+
     @Override
-    public void onConnected(@Nullable Bundle bundle) {
-        Log.i("TAG", "onConnected: ");
-        if(mLocationRequest == null) mLocationRequest = new LocationRequest();
-        mLocationRequest.setInterval(1000);
-        mLocationRequest.setFastestInterval(1000);
-        mLocationRequest.setPriority(LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY);
-        if(mLocationPermissionGranted)
-        LocationServices.FusedLocationApi.requestLocationUpdates(mGoogleApiClient,mLocationRequest,this);
+    public void onSuccess(List<LatLng> path, String distance, String duration) {
+        mTextName.setText(mSelectPlace.getName());
+        mTextAddress.setText(mSelectPlace.getAddress());
+        mTextDistance.setText(distance);
+        mTextDuration.setText(duration);
+        if(mCurrentPolyline != null) mCurrentPolyline.remove();
+        mCurrentPolyline = mMap.addPolyline(new PolylineOptions().addAll(path).color(Color.RED).width(5));
     }
 
     @Override
-    public void onConnectionSuspended(int i) {
-
+    public void onError(String err_msg) {
+        Toast.makeText(getApplicationContext(),err_msg,Toast.LENGTH_SHORT).show();
     }
 
     @Override
     public void onLocationChanged(Location location) {
-        Log.i("TAG", "onLocationChanged: ");
-        mLastLocation = location;
-        if(mCurrentMarker != null){
-            mCurrentMarker.remove();
-        }
-        LatLng latLng = new LatLng(location.getLatitude(),location.getLongitude());
-        MarkerOptions markerOptions = new MarkerOptions();
-        markerOptions.position(latLng);
-        markerOptions.title("Current Location");
-        markerOptions.icon(BitmapDescriptorFactory.fromBitmap(resizeBitmap("ic_location",50,60)));
-        mCurrentMarker = mMap.addMarker(markerOptions);
-        mMap.moveCamera(CameraUpdateFactory.newLatLng(latLng));
-        mMap.animateCamera(CameraUpdateFactory.zoomBy(10));
-
-        if(mGoogleApiClient != null) LocationServices.FusedLocationApi.removeLocationUpdates(mGoogleApiClient,this);
+        Log.i("TAG", "onLocationChanged: " + location.getProvider());
+        mCurrentLatLng = new LatLng(location.getLatitude(),location.getLongitude());
+        if(isUpdate)
+            mMapsPst.getDataDirection(new LatLng(location.getLatitude(), location.getLongitude()), mSelectPlace.getLatLng(),mode);
     }
 
+    @Override
+    public void onConnected(@Nullable Bundle bundle) {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
+        LocationServices.FusedLocationApi.requestLocationUpdates(
+                mGoogleApiClient, mLocationRequest, this);
+    }
+
+    @Override
+    public void onConnectionSuspended(int i) {
+        mGoogleApiClient.connect();
+    }
 
     @Override
     public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {
 
     }
+
+    @Override
+    protected void onDestroy() {
+        if (mGoogleApiClient != null
+                && mGoogleApiClient.isConnected()) {
+            LocationServices.FusedLocationApi.removeLocationUpdates(mGoogleApiClient, this);
+            mGoogleApiClient.disconnect();
+            mGoogleApiClient = null;
+        }
+        super.onDestroy();
+    }
+    @Override
+    protected void onStart() {
+        super.onStart();
+        if (mGoogleApiClient != null) {
+            mGoogleApiClient.connect();
+        }
+    }
+
+    @Override
+    protected void onStop() {
+        if (mGoogleApiClient != null) {
+            mGoogleApiClient.disconnect();
+        }
+        super.onStop();
+    }
+
 }

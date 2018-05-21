@@ -9,7 +9,7 @@ import java.util.List;
  * Created by San on 01/28/2018.
  */
 
-class Route {
+public class Route {
     @SerializedName("bounds")
     @Expose
     private Bounds bounds;
